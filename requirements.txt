@@ -4,3 +4,4 @@ openai
 reportlab
 kbcstorage
 requests
+streamlit_extras
