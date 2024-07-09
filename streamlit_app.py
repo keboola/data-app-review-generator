@@ -9,7 +9,6 @@ from streamlit_extras.stylable_container import stylable_container
 import streamlit.components.v1 as components
 import requests
 
-
 openai_token = st.secrets["openai_token"]
 kbc_url = st.secrets["kbc_url"]
 kbc_token = st.secrets["keboola_token"]
@@ -29,7 +28,6 @@ try:
     yelp_table = st.secrets["yelp_table"].replace("/", ".")
 except KeyError as e:
     yelp_table = ''
-
 
 client = Client(kbc_url, kbc_token)
 review_options = ['Manual Input']
@@ -166,7 +164,8 @@ def get_new_reviews(origin, num_of_reviews):
             data = data[['publishedAtDate', 'text', 'textTranslated', 'responseFromOwnerText']]
             data = data[data['text'].notnull()]
             data = data[data['responseFromOwnerText'].isnull()]
-            data['review'] = data.apply(lambda x: x['textTranslated'] if pd.notnull(x['textTranslated']) else x['text'],axis=1)
+            data['review'] = data.apply(lambda x: x['textTranslated'] if pd.notnull(x['textTranslated']) else x['text'],
+                                        axis=1)
             data = data[['publishedAtDate', 'review']]
             data.columns = ['date', 'review']
             data = data.sort_values(by='date', ascending=False)[:num_of_reviews]
@@ -294,4 +293,3 @@ if st.sidebar.button("Generate"):
 ChangeButtonColour("Generate", "#FFFFFF", "#1EC71E", "#1EC71E")
 
 display_footer_section()
-
