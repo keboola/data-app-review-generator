@@ -1,0 +1,6 @@
+pandas
+streamlit
+openai
+reportlab
+kbcstorage
+requests
