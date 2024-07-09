@@ -35,7 +35,7 @@ Secrets used:
 - yelp_table - The path to the table in Keboola that store the Yelp reviews data (optional). If entered, should be of the format in.c-bucket-name/table_name  
 
 
-| Version |    Date    |       Description        |
-|---------|:----------:|:------------------------:|
-| 1.0     | 2024-07-02 | A data app for CV Ranker |
+| Version |    Date    |           Description           |
+|---------|:----------:|:-------------------------------:|
+| 1.0     | 2024-07-09 | A data app for Review Generator |
 
