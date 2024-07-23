@@ -203,6 +203,52 @@ def get_new_reviews(origin, num_of_reviews):
     return None
 
 
+def get_review_replies(origin):
+    if origin == 'Google':
+        try:
+            data = get_dataframe(google_table)
+            data = data[['publishedAtDate', 'text', 'textTranslated', 'responseFromOwnerText']]
+            data = data[data['text'].notnull()]
+            data = data[data['responseFromOwnerText'].notnull()]
+            data['review'] = data.apply(lambda x: x['textTranslated'] if pd.notnull(x['textTranslated']) else x['text'],
+                                        axis=1)
+            data = data.sort_values(by='publishedAtDate', ascending=False)[:100]
+            data = data[['review', 'responseFromOwnerText']]
+            data.columns = ['review', 'response']
+            return data
+        except requests.exceptions.HTTPError as err:
+            if err.response.status_code == 404:
+                return None
+
+    elif origin == 'Facebook':
+        try:
+            data = get_dataframe(facebook_table)
+            return data
+        except requests.exceptions.HTTPError as err:
+            if err.response.status_code == 404:
+                return None
+    elif origin == 'Trip Advisor':
+        try:
+            data = get_dataframe(trip_advisor_table)
+            data = data[['publishedDate', 'text', 'ownerResponse_text']]
+            data = data[data['ownerResponse_text'].notnull()]
+            data = data.sort_values(by='publishedDate', ascending=False)[:100]
+            data = data[['text', 'ownerResponse_text']]
+            data.columns = ['review', 'response']
+            return data
+        except requests.exceptions.HTTPError as err:
+            if err.response.status_code == 404:
+                return None
+    elif origin == 'Yelp':
+        try:
+            data = get_dataframe(yelp_table)
+            return data
+        except requests.exceptions.HTTPError as err:
+            if err.response.status_code == 404:
+                return None
+    return None
+
+
 def get_dataframe(table_name):
     """
     Reads the provided table from the specified table in Keboola Connection.
@@ -243,53 +289,69 @@ title.title("Review Response Generator")
 
 # Input: JSON with pairs of reviews and responses
 with st.sidebar:
-    json_input = st.file_uploader("Upload a JSON file with review-response pairs", type=["json"])
     review_origin = st.selectbox("Where should I get the reviews?", review_options)
+    examples_origin = st.selectbox("Where should I take the examples from?", ['JSON file', 'Same as the reviews'])
     if review_origin == 'Manual Input':
         review_input = st.text_area("Enter a review", height=200)
+        examples_origin = 'JSON file'
     else:
         num_of_reviews_input = st.number_input('How many reviews should I respond to?', value=10, step=1)
 
+    if review_origin == 'Manual Input' or examples_origin == 'JSON file':
+        json_input = st.file_uploader("Upload a JSON file with review-response pairs", type=["json"])
+
 if st.sidebar.button("Generate"):
-    if json_input is not None:
-        if review_origin == 'Manual Input':
-            if review_input:
-                d = {'date': datetime.datetime.now(), 'review': review_input}
-                new_reviews = pd.DataFrame(data=d, index=[0])
-            else:
-                new_reviews = pd.DataFrame()
+    if review_origin == 'Manual Input' or examples_origin == 'JSON file':
+        if json_input is not None:
+            example_pairs = pd.read_json(json_input).to_dict(orient="records")
         else:
-            new_reviews = get_new_reviews(review_origin, num_of_reviews_input)
-
-        example_pairs = pd.read_json(json_input).to_dict(orient="records")
-        if new_reviews is None:
-            st.error('The table indicated for this data source does not exist', icon="🚨")
-        elif new_reviews.empty:
-            st.error('Please enter a review', icon="🚨")
-        else:
-            new_reviews['response'] = new_reviews.apply(lambda x: generate_response(example_pairs, x['review']), axis=1)
-            for index, row in new_reviews.iterrows():
-                with st.expander(f"{row['date']} - {row['review']}"):
-                    with stylable_container(
-                            "codeblock",
-                            """
-                            code {
-                                white-space: pre-wrap !important;
-                            }
-                            """,
-                    ):
-                        st.code(row['response'], language=None)
-
-            # Provide an option to download the responses
-            download_all.download_button(
-                label="Download Responses as CSV",
-                data=new_reviews.to_csv(index=False),
-                file_name="generated_responses.csv",
-                mime="text/csv"
-            )
-            ChangeButtonColour("Download Responses as CSV", "#FFFFFF", "#1EC71E", "#1EC71E")
+            st.error('Please upload an example json file', icon="🚨")
     else:
-        st.error('Please upload an example json file', icon="🚨")
+        example_pairs = get_review_replies(review_origin)
+        if example_pairs is not None:
+            example_pairs = get_review_replies(review_origin).to_dict(orient="records")
+            if len(example_pairs) == 0:
+                st.error('There are no response examples in the data, try uploading a json file instead', icon="🚨")
+        else:
+            st.error('There are no reviews in the data', icon="🚨")
+
+    if review_origin == 'Manual Input':
+        if review_input:
+            d = {'date': datetime.datetime.now(), 'review': review_input}
+            new_reviews = pd.DataFrame(data=d, index=[0])
+        else:
+            new_reviews = pd.DataFrame()
+    else:
+        new_reviews = get_new_reviews(review_origin, num_of_reviews_input)
+
+    if new_reviews is None:
+        st.error('The table indicated for this data source does not exist', icon="🚨")
+    elif new_reviews.empty:
+        st.error('There are no reviews to respond to', icon="🚨")
+    else:
+        new_reviews['response'] = new_reviews.apply(lambda x: generate_response(example_pairs, x['review']), axis=1)
+        for index, row in new_reviews.iterrows():
+            with st.expander(f"{row['date']} - {row['review']}"):
+                with stylable_container(
+                        "codeblock",
+                        """
+                        code {
+                            white-space: pre-wrap !important;
+                        }
+                        """,
+                ):
+                    st.code(row['response'], language=None)
+
+        # Provide an option to download the responses
+        download_all.download_button(
+            label="Download Responses as CSV",
+            data=new_reviews.to_csv(index=False),
+            file_name="generated_responses.csv",
+            mime="text/csv"
+        )
+        ChangeButtonColour("Download Responses as CSV", "#FFFFFF", "#1EC71E", "#1EC71E")
+    # else:
+    #     st.error('Please upload an example json file', icon="🚨")
 ChangeButtonColour("Generate", "#FFFFFF", "#1EC71E", "#1EC71E")
 
 display_footer_section()

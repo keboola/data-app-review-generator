@@ -8,7 +8,8 @@ The options for reviews data sources that are currently supported:
 - Trip Advisor
 
 The app assumes the use of an APIFY crawler to create the data  
-
+For Google Reviews, Google Maps Reviews Scraper actor is used  
+For Trip Advisor reviews, Trip Advisor Reviews Scraper actor is used  
 
 Requirements:
 - The input json includes pairs or dictionaries with "review" and "response" keys
