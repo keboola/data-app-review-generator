@@ -161,13 +161,13 @@ def get_new_reviews(origin, num_of_reviews):
     if origin == 'Google':
         try:
             data = get_dataframe(google_table)
-            data = data[['publishedAtDate', 'text', 'textTranslated', 'responseFromOwnerText']]
+            data = data[['publishedAtDate', 'text', 'textTranslated', 'responseFromOwnerText', 'reviewUrl']]
             data = data[data['text'].notnull()]
             data = data[data['responseFromOwnerText'].isnull()]
             data['review'] = data.apply(lambda x: x['textTranslated'] if pd.notnull(x['textTranslated']) else x['text'],
                                         axis=1)
-            data = data[['publishedAtDate', 'review']]
-            data.columns = ['date', 'review']
+            data = data[['publishedAtDate', 'review', 'reviewUrl']]
+            data.columns = ['date', 'review', 'url']
             data = data.sort_values(by='date', ascending=False)[:num_of_reviews]
             return data
         except requests.exceptions.HTTPError as err:
@@ -184,10 +184,10 @@ def get_new_reviews(origin, num_of_reviews):
     elif origin == 'Trip Advisor':
         try:
             data = get_dataframe(trip_advisor_table)
-            data = data[['publishedDate', 'text', 'ownerResponse_text']]
+            data = data[['publishedDate', 'text', 'ownerResponse_text', 'url']]
             data = data[data['ownerResponse_text'].isnull()]
-            data = data[['publishedDate', 'text']]
-            data.columns = ['date', 'review']
+            data = data[['publishedDate', 'text', 'url']]
+            data.columns = ['date', 'review', 'url']
             data = data.sort_values(by='date', ascending=False)[:num_of_reviews]
             return data
         except requests.exceptions.HTTPError as err:
@@ -331,7 +331,7 @@ if st.sidebar.button("Generate"):
     else:
         new_reviews['response'] = new_reviews.apply(lambda x: generate_response(example_pairs, x['review']), axis=1)
         for index, row in new_reviews.iterrows():
-            with st.expander(f"{row['date']} - {row['review']}"):
+            with st.expander(f"{row['url']}"):
                 with stylable_container(
                         "codeblock",
                         """
