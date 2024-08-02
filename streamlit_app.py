@@ -18,7 +18,7 @@ client = Client(kbc_url, kbc_token)
 LOGO_IMAGE_PATH = os.path.abspath("./app/static/keboola.png")
 
 # Setting page config
-st.set_page_config(page_title="Review generator")
+st.set_page_config(page_title="Keboola Review Response Generator")
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -135,13 +135,13 @@ def load_reviews():
     # Google Reviews version
     try:
         data = get_dataframe(apify_table)
-        data = data[['publishedAtDate', 'text', 'textTranslated', 'responseFromOwnerText', 'reviewUrl', 'name', 'title', 'address', 'stars']]
+        data = data[['publishedAtDate', 'text', 'textTranslated', 'responseFromOwnerText', 'reviewUrl', 'name', 'title', 'address', 'stars', 'publishAt']]
         data = data[data['text'].notnull()]
         # data = data[data['responseFromOwnerText'].isnull()]
         data['review'] = data.apply(lambda x: x['textTranslated'] if pd.notnull(x['textTranslated']) else x['text'],
                                     axis=1)
-        data = data[['publishedAtDate', 'review', 'reviewUrl', 'responseFromOwnerText', 'name', 'title', 'address', 'stars']]
-        data.columns = ['date', 'review', 'url', 'response', 'name', 'place', 'address', 'stars']
+        data = data[['publishedAtDate', 'review', 'reviewUrl', 'responseFromOwnerText', 'name', 'title', 'address', 'stars', 'publishAt']]
+        data.columns = ['date', 'review', 'url', 'response', 'name', 'place', 'address', 'stars', 'publishAt']
         data['source'] = 'Google Maps'
         data = data.sort_values(by='date', ascending=False)
         return data
@@ -209,48 +209,109 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="big-font"><span style="color:#1f8fff;">Keboola</span> Review Response Generator</div>', unsafe_allow_html=True)
-# st.title("")
-st.info("The Keboola AI-Powered Review Automation Data Pipeline Template scrapes reviews for restaurants and hospitality venues from various platforms (Yelp, Google Maps, DoorDash, UberEats, Tripadvisor, and Facebook). It utilizes AI to generate replies to unanswered reviews based on reviews already answered to keep the same tone, language etc. The Data App allows users to review, copy and paste these responses to respective platforms.", icon="ℹ️",)
 
 if "reviews" not in st.session_state:
     st.session_state.reviews = load_reviews()
 reviews = st.session_state.reviews
-if reviews is None:
-    st.error('The table indicated for this data does not exist', icon="🚨")
-elif len(reviews) == 0:
-    st.error('There are no reviews in the data', icon="🚨")
-else:
-    st.session_state.example_pairs = reviews[reviews['response'].notnull()][['review', 'response']].to_dict(orient="records")
-    st.session_state.new_reviews = reviews[reviews['response'].isnull()].copy()
-    st.markdown(f"I have loaded {len(st.session_state.reviews)} reviews. Out of those, {len(st.session_state.example_pairs)} have replies. I will use the latest {min(len(st.session_state.example_pairs), 50)} of them to generate responses.")
+num_of_reviews_input = 10
 
+st.markdown(
+    '<div class="big-font"><span style="color:#1f8fff;">Keboola</span> Review Response Generator</div>',
+    unsafe_allow_html=True)
 
-if "reviews" in st.session_state:
-    st.write("Number of Responses")
-    input_col, generate_col = st.columns([4, 1])
-    num_of_reviews_input = input_col.number_input('How many reviews should I respond to?', value=10, step=1, label_visibility='collapsed')
-    if generate_col.button("Generate"):
+# Custom CSS to style the button
+button_style = """
+    <style>
+    .stButton > button {
+        width: 100%;
+        border-radius: 10px;
+    }
+    </style>
+    """
+
+back_container = st.container()
+back_container.markdown(button_style, unsafe_allow_html=True)
+settings_container = st.container()
+reviews_container = st.container()
+
+if "screen" not in st.session_state:
+    st.session_state.screen = 'settings'
+screen = st.session_state.screen
+if screen == 'settings':
+    settings_container.info("The Keboola AI-Powered Review Automation Data Pipeline Template scrapes reviews for restaurants and hospitality venues from various platforms (Yelp, Google Maps, DoorDash, UberEats, Tripadvisor, and Facebook). It utilizes AI to generate replies to unanswered reviews based on reviews already answered to keep the same tone, language etc. The Data App allows users to review, copy and paste these responses to respective platforms.", icon="ℹ️",)
+
+    if reviews is None:
+        settings_container.error('The table indicated for this data does not exist', icon="🚨")
+    elif len(reviews) == 0:
+        settings_container.error('There are no reviews in the data', icon="🚨")
+    else:
+        st.session_state.example_pairs = reviews[reviews['response'].notnull()][['review', 'response']].to_dict(orient="records")
+        st.session_state.new_reviews = reviews[reviews['response'].isnull()].copy()
+        venue_name = reviews['place'].iloc[0]
+        address = reviews['address'].iloc[0]
+        settings_container.text_input("Venue Name", value=venue_name, disabled=True)
+        settings_container.text_input("Location", value=address, disabled=True)
+        num_of_reviews_input = settings_container.number_input('Number of Reviews', value=10, step=1)
+
+    if "reviews" in st.session_state:
+        container = settings_container.container()
+        with container:
+            col1, col2, col3 = st.columns([3, 2, 3])
+            # Place the button in the center column
+            with col2:
+                load_button = st.button("Load Reviews")
+
+        ChangeButtonColour("Load Reviews", "#FFFFFF", "#1EC71E", "#1EC71E")
+
+    if load_button:
         to_generate = st.session_state.new_reviews[:num_of_reviews_input].copy()
         to_generate['response'] = to_generate.apply(lambda x: generate_response(st.session_state.example_pairs[:50], x['review']), axis=1)
-        for index, row in to_generate.iterrows():
-            with st.container(border=True):
-                col1, col2 = st.columns([10, 1])
-                col1.markdown(f"{row['name']}<br><a href=\"{row['url']}\" style=\"font-size:10px\">Open in {row['source']}</a>", unsafe_allow_html=True)
-                col2.markdown(f"⭐{row['stars']}")
-                with st.expander("Review"):
-                    st.write(f"{row['review']}")
-                st.markdown(f"---")
-                with st.expander(f"AI generated response:"):
-                    with stylable_container(
-                            "codeblock",
-                            """
-                            code {
-                                white-space: pre-wrap !important;
-                            }
-                            """,
-                    ):
-                        st.code(row['response'], language=None)
-    ChangeButtonColour("Generate", "#FFFFFF", "#1EC71E", "#1EC71E")
+        st.session_state.generated = to_generate
+        st.session_state.screen = 'reviews'
+        st.rerun()
+
+if screen == 'reviews':
+    if back_container.button("← BACK TO SETTINGS", key='back_to_settings'):
+        st.session_state.screen = 'settings'
+        st.rerun()
+    for index, row in st.session_state.generated.iterrows():
+        with reviews_container.container(border=True):
+            col1, col2 = st.columns([1, 1])
+            col1.markdown(f"<span style=\'font-weight:bold;font-size:20px;\'>{row['name']}</span>"
+                          f"<br>"
+                          f"<a href=\"{row['url']}\" style=\"font-size:10px\">Open in {row['source']}</a>", unsafe_allow_html=True)
+            stars_str = '<p style=\'text-align: right;\'>'
+            for i in range(5):
+                if i < row['stars']:
+                    stars_str = stars_str + "⭐"
+            stars_str = stars_str + ' <span style=\'font-size:12px;\'>' + row['publishAt'] + '</span></p>'
+            col2.markdown(f"{stars_str}", unsafe_allow_html=True)
+            st.markdown("""
+            <style>
+            .review-font {
+                font-size:14px !important;
+            }
+            .review-font p {
+                font-size:14px !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+            st.markdown(f"<div class=\'review-font\'>{row['review']}</div>", unsafe_allow_html=True)
+            st.markdown(f"---")
+            generated_col, regenerate_col = st.columns([13, 1])
+            generated_col.markdown(f"<span style=\'font-weight:bold;font-size:14px;\'>AI generated response</span>", unsafe_allow_html=True)
+
+            if regenerate_col.button("↺", key="regenerate_button_"+str(index), help='Regenerate'):
+                row['response'] = generate_response(st.session_state.example_pairs[:50], row['review'])
+            with stylable_container(
+                    "codeblock",
+                    """
+                    code {
+                        white-space: pre-wrap !important;
+                        font-size:12px;
+                    }
+                    """,
+            ):
+                st.code(row['response'], language=None)
 
 display_footer_section()
