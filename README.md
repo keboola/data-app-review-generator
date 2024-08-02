@@ -17,6 +17,7 @@ Requirements:
   - 'title'
   - 'address'
   - 'stars'
+  - 'publishAt'
 - The app assumes it will receive the path to the tables in Keboola in the following format: in.c-bucket-name.table_name
 
 Secrets used:
